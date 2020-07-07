@@ -36,13 +36,11 @@ pub struct State {
   match_index: Vec<i32>,
 
   // Specific to our implementation
-  node_type: NodeType,
-}
+  pub node_type: i32,
 
-enum NodeType {
-  Leader,
-  Coordinator,
-  Follower  
+  // Flags for inter-thread communication
+  pub reset_timer: bool,
+  pub start_election: bool
 }
 
 impl State {
@@ -63,7 +61,9 @@ impl State {
       last_applied: 0,
       next_index: next_index,
       match_index: match_index,
-      node_type: NodeType::Coordinator,
+      node_type: 1, // Follower, Candidate, Leader
+      reset_timer: false,
+      start_election: false
     };
 
     return state;

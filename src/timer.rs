@@ -1,64 +1,45 @@
-use rand::Rng;
+use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 use std::thread;
-use std::sync::mpsc;
-use std::sync::atomic::{AtomicBool, Ordering};
-use event_listener::Event;
-use std::sync::Arc;
+use rand::Rng;
+
+use crate::state;
 
 pub struct Timer {
-  pub start: Instant,
-  pub max_duration: u128,
-  pub start_election_flag: Arc<AtomicBool>,
-  pub start_election_event: Arc<Event>,
-  pub reset_timer_flag: Arc<AtomicBool>,
+  start: Instant,
+  max_duration: u128,
+  node_state: Arc<Mutex<state::State>>
 }
 
 impl Timer {
   pub fn start(
-    start_election_flag: Arc<AtomicBool>,
-    start_election_event: Arc<Event>,
-    reset_timer_flag: Arc<AtomicBool>
+    node_state: &Arc<Mutex<state::State>>
   ) {
     thread::spawn({
       let mut timer = Timer {
         start: Instant::now(),
         max_duration: Self::get_random_timer_duration(),
-        start_election_flag: start_election_flag.clone(),
-        start_election_event: start_election_event.clone(),
-        reset_timer_flag: reset_timer_flag.clone()
+        node_state: Arc::clone(&node_state)
       };
 
       move || {
         loop {
           let elapsed_time = timer.start.elapsed().as_millis();
 
+          let mut state_lock = timer.node_state.lock().unwrap();
+
           if elapsed_time >= timer.max_duration {
-            timer.start_election();
+            timer.start = Instant::now();
+            state_lock.start_election = true;
+            state_lock.node_type = 1;
           }
 
-          if timer.reset_timer_flag_received() {
-            timer.reset_timer();
+          if state_lock.reset_timer {
+            timer.start = Instant::now(); 
           }
-
         }
       }
     });
-  }
-
-  fn reset_timer_flag_received(&self) -> bool {
-    return self.reset_timer_flag.load(Ordering::SeqCst);
-  }
-
-  fn reset_timer(&mut self) {
-    self.reset_timer_flag.store(false, Ordering::SeqCst);
-    self.start = Instant::now();
-  }
-
-  fn start_election(&mut self) {
-    self.start = Instant::now();
-    self.start_election_flag.store(true, Ordering::SeqCst);
-    self.start_election_event.notify(usize::MAX);
   }
 
   fn get_random_timer_duration() -> u128 {
