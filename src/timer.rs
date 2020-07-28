@@ -26,16 +26,26 @@ impl Timer {
         loop {
           let elapsed_time = timer.start.elapsed().as_millis();
 
-          let mut state_lock = timer.node_state.lock().unwrap();
-
+          // If election timeout elapses without receiving AppendEntries RPC
+          // or granting vote to candidate, convert to candidate
           if elapsed_time >= timer.max_duration {
             timer.start = Instant::now();
+            let mut state_lock = timer.node_state.lock().unwrap();
             state_lock.start_election = true;
-            state_lock.node_type = 1;
+            state_lock.node_type = 2;
           }
 
-          if state_lock.reset_timer {
+          let reset_timer;
+          {
+            let state_lock = timer.node_state.lock().unwrap();
+            reset_timer = state_lock.reset_timer;
+          }
+
+          // Flag is set if a message is sent from another leader
+          if reset_timer {
             timer.start = Instant::now(); 
+            let mut state_lock = timer.node_state.lock().unwrap();
+            state_lock.reset_timer = false;
           }
         }
       }
